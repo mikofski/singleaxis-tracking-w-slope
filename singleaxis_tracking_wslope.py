@@ -80,11 +80,6 @@ class SingleaxisTrackerWSlope():
     gcr : float
         ground coverage ratio, total tracker width perpendicular to axes over
         distance between tracker axes
-
-    Returns
-    -------
-    tracker rotation [degrees], angle of incidence [degrees], true-tracking
-    [radians]
     """
         
     def __init__(self, system_plane, tracker_azimuth, max_rotation, gcr):
@@ -181,7 +176,22 @@ class SingleaxisTrackerWSlope():
         tr_norm_sys_tr = np.dot(self._sys_tr_z_rot, tr_norm_sys)
         return np.arctan2(tr_norm_sys_tr[0, 0], tr_norm_sys_tr[2, 0])
 
-    def get_tracker_rotation(self, solar_position, backtracking=True):
+    def calc_tracker_rotation(self, solar_position, backtracking=True):
+        """
+        Calculate tracker rotation and angle of incidence in degrees.
+
+        Parameters
+        ----------
+        solar_position : :class:`pandas.DataFrame`
+            the output of ``pvlib.solarposition.get_solarposition``
+        backtracking : bool
+            if true then backtracking is enabled
+
+        Returns
+        -------
+        tracker rotation [degrees], angle of incidence [degrees], true-tracking
+        [radians]
+        """
         ze = solar_position['apparent_zenith'].values
         az = solar_position['azimuth'].values
         is_day = ze < DAY
@@ -242,7 +252,7 @@ def test_tracker_rotation():
     lat, lon = -27.597300, -48.549610
     times = pd.DatetimeIndex(pd.date_range(starttime, stoptime, freq='H'))
     solpos = pvlib.solarposition.get_solarposition(times, lat, lon)
-    trrot, aoi, trrot_rad = singleaxis_tracker_wslope_test.get_tracker_rotation(solpos)
+    trrot, aoi, trrot_rad = singleaxis_tracker_wslope_test.calc_tracker_rotation(solpos)
     expected = pd.read_csv('Florianopolis_Brasilia.csv')
     assert np.allclose(solpos['apparent_zenith'], expected['zen'])
     assert np.allclose(solpos['azimuth'], expected['azim'])
@@ -261,7 +271,7 @@ def test_pvlib_flat():
     pvlib_flat = pvlib.tracking.singleaxis(
         solpos['apparent_zenith'], solpos['azimuth'])
     sat_flat = SingleaxisTrackerWSlope((0,0), 0, max_rotation=90, gcr=2.0/7.0)
-    trrot, aoi, _ = sat_flat.get_tracker_rotation(solpos)
+    trrot, aoi, _ = sat_flat.calc_tracker_rotation(solpos)
     nans = np.isnan(pvlib_flat['tracker_theta'])
     # FIXME: both pointing north, so why are signs opposite?
     assert np.allclose(pvlib_flat['tracker_theta'][~nans], -trrot[~nans])
@@ -277,7 +287,7 @@ def test_pvlib_tilt20():
     pvlib_tilt20 = pvlib.tracking.singleaxis(
         solpos['apparent_zenith'], solpos['azimuth'], axis_tilt=20.0, axis_azimuth=180.0)
     sat_tilt20 = SingleaxisTrackerWSlope((180.0, 20.0), 0, max_rotation=90, gcr=2.0/7.0)
-    trrot, aoi, _ = sat_tilt20.get_tracker_rotation(solpos)
+    trrot, aoi, _ = sat_tilt20.calc_tracker_rotation(solpos)
     nans = np.isnan(pvlib_tilt20['tracker_theta'])
     # FIXME: pvlib and sat are not agreeing on some backtracking times
     ninetys = np.abs(pvlib_tilt20['tracker_theta']) < 90.000000
