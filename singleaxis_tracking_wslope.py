@@ -1,3 +1,4 @@
+#! /usr/bin/env python
 # -*- coding: utf-8 -*-
 """Single Axis Tracker with slope"""
 
@@ -170,7 +171,8 @@ class SingleaxisTrackerWSlope():
         return np.arctan2(tr_norm_sys_tr[0, 0], tr_norm_sys_tr[2, 0])
 
     def get_tracker_rotation(self, solar_position, backtracking=True):
-        ze, az = solar_position['apparent_zenith'], solar_position['azimuth']
+        ze = solar_position['apparent_zenith'].values
+        az = solar_position['azimuth'].values
         is_day = ze < DAY
         solar_vector = get_solar_vector(ze, az)
         # rotate solar vector into system plane coordinate system
@@ -179,7 +181,7 @@ class SingleaxisTrackerWSlope():
         # rotate solar vector into tracker coordinate system
         sol_sys_tr = np.dot(self._sys_tr_z_rot, sol_sys)
         # tracker rotation without limits
-        tr_rot_no_lim = np.arctan2(sol_sys_tr[0, 0], sol_sys_tr[2, 0])
+        tr_rot_no_lim = np.arctan2(sol_sys_tr[0, :], sol_sys_tr[2, :])
         tr_rot_rad = np.maximum(-self.max_rotation, tr_rot_no_lim)
         tr_rot_rad = np.minimum(tr_rot_rad, self.max_rotation)
         if backtracking:
@@ -194,7 +196,8 @@ class SingleaxisTrackerWSlope():
         # calculate angle of incidence
         x_tracker = np.sin(tr_rot_backtrack)
         z_tracker = np.cos(tr_rot_backtrack)
-        aoi_rad = np.arccos(x_tracker*sol_sys_tr[0, 0] + z_tracker*sol_sys_tr[2, 0])
+        aoi_rad = np.arccos(
+            x_tracker*sol_sys_tr[0, :] + z_tracker*sol_sys_tr[2, :])
         tr_rot_horz = self.tracker_side_slope - tr_rot_backtrack
         tracker_rotation = np.degrees(tr_rot_horz)
         aoi = np.degrees(aoi_rad)
@@ -202,19 +205,42 @@ class SingleaxisTrackerWSlope():
 
 
 def test_tracker_rotation():
-    test_singleaxis_tracker_wslope = SingleaxisTrackerWSlope(
+    singleaxis_tracker_wslope_test = SingleaxisTrackerWSlope(
         system_plane=(77.34, 10.1149),
         tracker_azimuth=0,
         max_rotation=75,
         pitch=5,
         gcr = 0.328
     )
-    starttime = '2019-01-01T00:00:00-0800'
-    stoptime = '2019-12-31T23:59:59-0800'
+    assert np.isclose(
+        singleaxis_tracker_wslope_test.system_azimuth, 1.349837643)
+    assert np.isclose(
+        singleaxis_tracker_wslope_test.system_zenith, 0.176538309)
+    assert np.isclose(singleaxis_tracker_wslope_test.tracker_azimuth, 0.0)
+    assert np.isclose(singleaxis_tracker_wslope_test.max_rotation, 1.308996939)
+    assert np.isclose(singleaxis_tracker_wslope_test.module_length, 1.64)
+    LOGGER.debug(
+        'sideslope = %g', singleaxis_tracker_wslope_test.tracker_side_slope)
+    assert np.isclose(
+        singleaxis_tracker_wslope_test.tracker_side_slope, -0.172202784)
+    LOGGER.debug(
+        'tracker zenith = %g', singleaxis_tracker_wslope_test.tracker_zenith)
+    assert np.isclose(
+        singleaxis_tracker_wslope_test.tracker_zenith, 0.039077922)
+    starttime = '2017-01-01T00:30:00-0300'
+    stoptime = '2017-12-31T23:59:59-0300'
+    lat, lon = -27.597300, -48.549610
     times = pd.DatetimeIndex(pd.date_range(starttime, stoptime, freq='H'))
-    solpos = pvlib.solarposition.get_solarposition(times, -27.597300, -48.549610)
-    return test_singleaxis_tracker_wslope.get_tracker_rotation(solpos)
+    solpos = pvlib.solarposition.get_solarposition(times, lat, lon)
+    trrot, aoi = singleaxis_tracker_wslope_test.get_tracker_rotation(solpos)
+    expected = pd.read_csv('Florianopolis_Brasilia.csv')
+    assert np.allclose(solpos['apparent_zenith'], expected['zen'])
+    assert np.allclose(solpos['azimuth'], expected['azim'])
+    assert np.allclose(trrot, expected['trrot'].values)
+    aoi90 = np.abs(aoi) < 90
+    assert np.allclose(aoi[aoi90], expected['aoi'][aoi90].values, 0.00055)
+    return trrot, aoi, singleaxis_tracker_wslope_test
 
 
 if __name__ == "__main__":
-    trrot, aoi = test_tracker_rotation()
+    trrot, aoi, singleaxis_tracker_wslope_test = test_tracker_rotation()
