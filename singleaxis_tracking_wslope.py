@@ -16,7 +16,7 @@ AXES = ['x', 'y', 'z']
 DAY = 90.0
 
 
-def get_rotation_matrix(angle, axis):
+def _get_rotation_matrix(angle, axis):
     """
     Return a rotation matrix that when multiplied by a column vector returns
     a new column vector that is rotated clockwise around the given axis by the
@@ -71,7 +71,20 @@ class SingleaxisTrackerWSlope():
     ---------
     system_plane : tuple of float
         the orientation of the plane containing the tracker axes, should be a
-        tuple of floats with azimuth and zenith 
+        tuple of floats with azimuth and zenith [degrees]
+    tracker_azimuth : float
+        the direction [degrees] the tracker axes are pointing
+    max_rotation : float
+        the maximum tracker rotation [degrees] relative to the system plane,
+        symmetrical
+    gcr : float
+        ground coverage ratio, total tracker width perpendicular to axes over
+        distance between tracker axes
+
+    Returns
+    -------
+    tracker rotation [degrees], angle of incidence [degrees], true-tracking
+    [radians]
     """
         
     def __init__(self, system_plane, tracker_azimuth, max_rotation, gcr):
@@ -81,15 +94,15 @@ class SingleaxisTrackerWSlope():
         self.max_rotation = np.radians(max_rotation)  #: maximum rotation
         self.gcr = gcr  #: gcr
         # z-rotation matrix global to system plane
-        self._sys_z_rot = get_rotation_matrix(self.system_azimuth, 'z')
+        self._sys_z_rot = _get_rotation_matrix(self.system_azimuth, 'z')
         # x-rotation matrix global to system plane
-        self._sys_x_rot = get_rotation_matrix(self.system_zenith, 'x')
+        self._sys_x_rot = _get_rotation_matrix(self.system_zenith, 'x')
         #: tracker axis zenith
         self.tracker_zenith = -self._calc_tracker_axis_tilt()
         # tracker axis rotation relative to system plane
         self._sys_track_rel_rot = self._calc_system_tracker_relative_rotation()
         # z-rotation matrix system plane to tracker
-        self._sys_tr_z_rot = get_rotation_matrix(self._sys_track_rel_rot, 'z')
+        self._sys_tr_z_rot = _get_rotation_matrix(self._sys_track_rel_rot, 'z')
         #: tracker side slope
         self.tracker_side_slope = self._calc_side_slope()
 
