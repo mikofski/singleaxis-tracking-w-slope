@@ -161,7 +161,7 @@ class SingleaxisTrackerWSlope():
     def _calc_side_slope(self):
         # find side slope
         # 1. tracker normal vector
-        sin_tr_ze = np.cos(self.tracker_zenith)
+        sin_tr_ze = np.sin(self.tracker_zenith)
         tr_norm = np.array([
             [sin_tr_ze*np.sin(self.tracker_azimuth)],
             [sin_tr_ze*np.cos(self.tracker_azimuth)],
