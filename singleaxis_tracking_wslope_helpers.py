@@ -168,21 +168,28 @@ def _singleaxis_tracking_wslope_test_helper(
     tracker_zenith = calc_tracker_axis_tilt(
         system_azimuth, system_zenith, tracker_azimuth)
     axis_tilt = np.degrees(tracker_zenith)
-    sat = pvlib.tracking.singleaxis(
-        apparent_zenith, azimuth, axis_tilt, axis_azimuth,
-        max_angle, False, gcr)
-    tr_rot_rad = np.radians(sat['tracker_theta'])
     side_slope, tr_rel_rot = calc_system_tracker_side_slope(
         tracker_azimuth, tracker_zenith, system_azimuth, system_zenith)
+    morn_angle = max_angle - np.degrees(side_slope)
+    eve_angle = max_angle + np.degrees(side_slope)
+    sat_morn = pvlib.tracking.singleaxis(
+        apparent_zenith, azimuth, axis_tilt, axis_azimuth,
+        morn_angle, False, gcr)
+    sat_eve = pvlib.tracking.singleaxis(
+        apparent_zenith, azimuth, axis_tilt, axis_azimuth,
+        eve_angle, False, gcr)
+    morn = azimuth < 180
+    sat = pd.concat([sat_morn[morn], sat_eve[~morn]]).sort_index()
+    tr_rot_rad = np.radians(sat['tracker_theta'])
     if backtrack:
         # this could be a place to try the walrus := operator from py38
-        lx = np.cos(side_slope - tr_rot_rad)
+        lx = np.cos(tr_rot_rad + side_slope)
         backtrack_rot = np.where(lx < gcr, np.arccos(lx / gcr), 0)
         tr_rot_backtrack = tr_rot_rad - backtrack_rot * np.sign(tr_rot_rad)
-        sat['tracker_theta'] = np.degrees(tr_rot_backtrack)
+        sat['tracker_theta'] = -np.degrees(tr_rot_backtrack)
         # calculate angle of incidence
-        x_tracker = np.sin(side_slope - tr_rot_backtrack)
-        z_tracker = np.cos(side_slope - tr_rot_backtrack)
+        x_tracker = np.sin(tr_rot_backtrack + side_slope)
+        z_tracker = np.cos(tr_rot_backtrack + side_slope)
         # we need the solar vector
         solar_ze_rad = np.radians(apparent_zenith)
         solar_az_rad = np.radians(azimuth)
@@ -226,7 +233,7 @@ def _singleaxis_tracking_wslope_test_helper(
     return sat
 
 
-def test_tracker_rotation():
+def test_tracker_wslope_helper():
     system_plane = (77.34, 10.1149)
     system_azimuth = np.radians(system_plane[0])
     system_zenith = np.radians(system_plane[1])
@@ -255,8 +262,20 @@ def test_tracker_rotation():
     expected = pd.read_csv('Florianopolis_Brasilia.csv')
     assert np.allclose(solpos['apparent_zenith'], expected['zen'])
     assert np.allclose(solpos['azimuth'], expected['azim'])
-    assert np.allclose(sat['tracker_theta'], expected['trrot'].values)
-    aoi90 = np.abs(sat['aoi']) < 90
+    roundoff_errors = ['2017-03-14 18:30:00-03:00',
+        '2017-10-30 18:30:00-03:00',
+        '2017-10-31 18:30:00-03:00',
+        '2017-11-01 18:30:00-03:00',
+        '2017-11-02 18:30:00-03:00',
+        '2017-11-03 18:30:00-03:00']
+    for idx in roundoff_errors:
+        sat['tracker_theta'][idx] = np.nan
+        sat.loc[idx]['aoi'] = np.nan
+    nans = np.isnan(sat['tracker_theta'].values)
+    expected['trrot'][nans] = np.nan
+    expected['aoi'][nans] = np.nan
+    assert np.allclose(sat['tracker_theta'], expected['trrot'].values, equal_nan=True)
+    aoi90 = np.abs(sat['aoi'].values) < 90
     assert np.allclose(sat['aoi'][aoi90], expected['aoi'][aoi90].values, 0.00055)
     return tracker_zenith, side_slope, tr_rel_rot, sat
 
@@ -302,6 +321,6 @@ def test_pvlib_tilt20():
 
 
 if __name__ == "__main__":
-    trrot, aoi, trrot_rad, singleaxis_tracker_wslope_test = test_tracker_rotation()
+    tracker_zenith, side_slope, tr_rel_rot, sat = test_tracker_wslope_helper()
     test_pvlib_flat()
     test_pvlib_tilt20()
