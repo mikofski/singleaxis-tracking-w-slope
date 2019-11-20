@@ -215,43 +215,13 @@ def _singleaxis_tracking_wslope_test_helper(
         x_tracker = np.sin(tr_rot_backtrack + side_slope)
         z_tracker = np.cos(tr_rot_backtrack + side_slope)
         # we need the solar vector
-        # solar_ze_rad = np.radians(apparent_zenith)
-        # solar_az_rad = np.radians(azimuth)
-        # sin_solar_ze = np.sin(solar_ze_rad)
-        # x_solar = sin_solar_ze * np.sin(solar_az_rad)
-        # y_solar = sin_solar_ze * np.cos(solar_az_rad)
-        # z_solar = np.cos(solar_ze_rad)
-        # solar_vector = np.stack((x_solar, y_solar, z_solar), axis=0)
         solar_vector = _get_solar_vector(apparent_zenith, azimuth)
         # we need the system rotation
-        # r11 = r22 = np.cos(system_azimuth)
-        # r21 = np.sin(system_azimuth)
-        # r12 = -r21
-        # rot = np.array([
-        #     [1, 0, 0],
-        #     [0, r11, r12],
-        #     [0, r21, r22]])
-        # sys_z_rot = np.roll(rot, (2, 2), (1, 0))
         sys_z_rot = _get_rotation_matrix(system_azimuth, axis=2)
         sol_sys_z_rot = np.dot(sys_z_rot, solar_vector)
-        # r11 = r22 = np.cos(system_zenith)
-        # r21 = np.sin(system_zenith)
-        # r12 = -r21
-        # sys_x_rot = np.array([
-        #     [1, 0, 0],
-        #     [0, r11, r12],
-        #     [0, r21, r22]])
         sys_x_rot = _get_rotation_matrix(system_zenith)
         sol_sys = np.dot(sys_x_rot, sol_sys_z_rot)
         # we need the relative rotation
-        # r11 = r22 = np.cos(tr_rel_rot)
-        # r21 = np.sin(tr_rel_rot)
-        # r12 = -r21
-        # rot = np.array([
-        #     [1, 0, 0],
-        #     [0, r11, r12],
-        #     [0, r21, r22]])
-        # sys_tr_z_rot = np.roll(rot, (2, 2), (1, 0))
         sys_tr_z_rot = _get_rotation_matrix(tr_rel_rot, axis=2)
         sol_sys_tr = np.dot(sys_tr_z_rot, sol_sys)
         aoi_rad = np.arccos(
@@ -290,21 +260,27 @@ def test_tracker_wslope_helper():
     expected = pd.read_csv('Florianopolis_Brasilia.csv')
     assert np.allclose(solpos['apparent_zenith'], expected['zen'])
     assert np.allclose(solpos['azimuth'], expected['azim'])
-    roundoff_errors = ['2017-03-14 18:30:00-03:00',
+    roundoff_errors = [
+        '2017-03-14 18:30:00-03:00',
         '2017-10-30 18:30:00-03:00',
         '2017-10-31 18:30:00-03:00',
         '2017-11-01 18:30:00-03:00',
         '2017-11-02 18:30:00-03:00',
         '2017-11-03 18:30:00-03:00']
     for idx in roundoff_errors:
+        LOGGER.debug(
+            'date: %s, tracker theta: %g, aoi: %g', idx,
+            sat['tracker_theta'][idx], sat.loc[idx]['aoi'])
         sat['tracker_theta'][idx] = np.nan
         sat.loc[idx]['aoi'] = np.nan
     nans = np.isnan(sat['tracker_theta'].values)
     expected['trrot'][nans] = np.nan
     expected['aoi'][nans] = np.nan
-    assert np.allclose(sat['tracker_theta'], expected['trrot'].values, equal_nan=True)
+    assert np.allclose(
+        sat['tracker_theta'], expected['trrot'].values, equal_nan=True)
     aoi90 = np.abs(sat['aoi'].values) < 90
-    assert np.allclose(sat['aoi'][aoi90], expected['aoi'][aoi90].values, 0.00055)
+    assert np.allclose(
+        sat['aoi'][aoi90], expected['aoi'][aoi90].values, 0.00055)
     return tracker_zenith, side_slope, tr_rel_rot, sat
 
 
@@ -333,10 +309,12 @@ def test_pvlib_tilt20():
     times = pd.DatetimeIndex(pd.date_range(starttime, stoptime, freq='H'))
     solpos = pvlib.solarposition.get_solarposition(times, lat, lon)
     pvlib_tilt20 = pvlib.tracking.singleaxis(
-        solpos['apparent_zenith'], solpos['azimuth'], axis_tilt=20.0, axis_azimuth=180.0)
+        solpos['apparent_zenith'], solpos['azimuth'], axis_tilt=20.0,
+        axis_azimuth=180.0)
     sat_tilt20 = _singleaxis_tracking_wslope_test_helper(
-        solpos['apparent_zenith'], solpos['azimuth'], system_plane=(180.0, 20.0),
-        axis_azimuth=0, max_angle=90, backtrack=True, gcr=2.0/7.0)
+        solpos['apparent_zenith'], solpos['azimuth'],
+        system_plane=(180.0, 20.0), axis_azimuth=0, max_angle=90,
+        backtrack=True, gcr=2.0/7.0)
     trrot, aoi = sat_tilt20['tracker_theta'].values, sat_tilt20['aoi'].values
     nans = np.isnan(pvlib_tilt20['tracker_theta'])
     # FIXME: pvlib and sat are not agreeing on some backtracking times
@@ -344,7 +322,8 @@ def test_pvlib_tilt20():
     zeroes = np.isclose(trrot, 0.0)
     conditions = ~nans & ninetys & ~zeroes
     # TODO: now both are pointing south, and signs are the same, look into this
-    assert np.allclose(pvlib_tilt20['tracker_theta'][conditions], trrot[conditions])
+    assert np.allclose(
+        pvlib_tilt20['tracker_theta'][conditions], trrot[conditions])
     assert np.allclose(pvlib_tilt20['aoi'][conditions], aoi[conditions])
 
 
