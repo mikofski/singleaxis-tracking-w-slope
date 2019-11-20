@@ -194,22 +194,29 @@ def _singleaxis_tracking_wslope_test_helper(
     axis_tilt = np.degrees(tracker_zenith)
     side_slope, tr_rel_rot = calc_system_tracker_side_slope(
         tracker_azimuth, tracker_zenith, system_azimuth, system_zenith)
-    morn_angle = max_angle - np.degrees(side_slope)
-    eve_angle = max_angle + np.degrees(side_slope)
-    sat_morn = pvlib.tracking.singleaxis(
-        apparent_zenith, azimuth, axis_tilt, axis_azimuth,
-        morn_angle, False, gcr)
-    sat_eve = pvlib.tracking.singleaxis(
-        apparent_zenith, azimuth, axis_tilt, axis_azimuth,
-        eve_angle, False, gcr)
-    morn = azimuth < 180
-    sat = pd.concat([sat_morn[morn], sat_eve[~morn]]).sort_index()
-    tr_rot_rad = np.radians(sat['tracker_theta'])
-    if backtrack:
+    if not backtrack:
+        morn_angle = max_angle - np.degrees(side_slope)
+        eve_angle = max_angle + np.degrees(side_slope)
+        sat_morn = pvlib.tracking.singleaxis(
+            apparent_zenith, azimuth, axis_tilt, axis_azimuth,
+            morn_angle, False, gcr)
+        sat_eve = pvlib.tracking.singleaxis(
+            apparent_zenith, azimuth, axis_tilt, axis_azimuth,
+            eve_angle, False, gcr)
+        morn = azimuth < 180
+        sat = pd.concat([sat_morn[morn], sat_eve[~morn]]).sort_index()
+    else:
+        sat = pvlib.tracking.singleaxis(
+            apparent_zenith, azimuth, axis_tilt, axis_azimuth,
+            180, False, gcr)  # turn off backtracking, set max angle to 180
+        tr_rot_rad = np.radians(sat['tracker_theta'])
         # this could be a place to try the walrus := operator from py38
-        lx = np.cos(tr_rot_rad + side_slope)
-        backtrack_rot = np.where(lx < gcr, np.arccos(lx / gcr), 0)
+        lrot = np.cos(tr_rot_rad + side_slope)
+        cos_rot = np.clip(np.arccos(lrot / gcr), -1, 1)
+        backtrack_rot = np.where(lrot < gcr, cos_rot, 0)
         tr_rot_backtrack = tr_rot_rad - backtrack_rot * np.sign(tr_rot_rad)
+        tr_rot_backtrack = np.clip(
+            tr_rot_backtrack + side_slope, -max_angle, max_angle) - side_slope
         sat['tracker_theta'] = -np.degrees(tr_rot_backtrack)
         # calculate angle of incidence
         x_tracker = np.sin(tr_rot_backtrack + side_slope)
@@ -235,7 +242,7 @@ def test_tracker_wslope_helper():
     system_plane = (77.34, 10.1149)
     system_azimuth = np.radians(system_plane[0])
     system_zenith = np.radians(system_plane[1])
-    axis_azimuth = 0
+    axis_azimuth = 0.0
     tracker_azimuth = np.radians(axis_azimuth)
     max_rotation = 75.0
     gcr = 0.328
@@ -328,6 +335,6 @@ def test_pvlib_tilt20():
 
 
 if __name__ == "__main__":
-    tracker_zenith, side_slope, tr_rel_rot, sat = test_tracker_wslope_helper()
+    TRACKER_ZENITH, SIDE_SLOPE, TR_REL_ROT, SAT = test_tracker_wslope_helper()
     test_pvlib_flat()
     test_pvlib_tilt20()
