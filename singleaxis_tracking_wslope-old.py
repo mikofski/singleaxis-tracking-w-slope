@@ -34,7 +34,8 @@ def _get_rotation_matrix(angle, axis):
     rotation matrix
 
     References:
-       `Rotation Matrix <https://en.wikipedia.org/wiki/Rotation_matrix#Basic_rotations>`_
+       `Rotation Matrix
+       <https://en.wikipedia.org/wiki/Rotation_matrix#Basic_rotations>`_
 
     """
     r11 = r22 = np.cos(angle)
@@ -53,7 +54,7 @@ def _get_rotation_matrix(angle, axis):
     return rot
 
 
-def get_solar_vector(solar_zenith, solar_azimuth):
+def _get_solar_vector(solar_zenith, solar_azimuth):
     solar_ze_rad = np.radians(solar_zenith)
     solar_az_rad = np.radians(solar_azimuth)
     sin_solar_ze = np.sin(solar_ze_rad)
@@ -81,7 +82,7 @@ class SingleaxisTrackerWSlope():
         ground coverage ratio, total tracker width perpendicular to axes over
         distance between tracker axes
     """
-        
+
     def __init__(self, system_plane, tracker_azimuth, max_rotation, gcr):
         self.system_azimuth = np.radians(system_plane[0])  #: system azimuth
         self.system_zenith = np.radians(system_plane[1])  #: system zenith
@@ -139,12 +140,12 @@ class SingleaxisTrackerWSlope():
         #
         # trick: multiply top and bottom by cos(sys_az-tr_az) and remember that
         #        sin^2 + cos^2 = 1 (or just use sympy.simplify)
-        # 
+        #
         # tan(tr_ze) = -tan(sys_ze)*cos(sys_az-tr_az)  QED
         sys_az_rel_to_tr_az = self.system_azimuth - self.tracker_azimuth
         tan_tr_ze = -np.cos(sys_az_rel_to_tr_az)*np.tan(self.system_zenith)
         return np.arctan(tan_tr_ze)
-        
+
     def _calc_system_tracker_relative_rotation(self):
         # find the relative rotation of the trackers in the system plane
         # 1. tracker axis vector
@@ -153,7 +154,7 @@ class SingleaxisTrackerWSlope():
             [cos_tr_ze*np.sin(self.tracker_azimuth)],
             [cos_tr_ze*np.cos(self.tracker_azimuth)],
             [np.sin(-self.tracker_zenith)]])
-        # 2. rotate tracker axis vector from global to system reference frame 
+        # 2. rotate tracker axis vector from global to system reference frame
         tr_ax_sys_Rz = np.dot(self._sys_z_rot, tr_ax)
         tr_ax_sys = np.dot(self._sys_x_rot, tr_ax_sys_Rz)
         return np.arctan2(tr_ax_sys[0, 0], tr_ax_sys[1, 0])
@@ -166,7 +167,7 @@ class SingleaxisTrackerWSlope():
             [sin_tr_ze*np.sin(self.tracker_azimuth)],
             [sin_tr_ze*np.cos(self.tracker_azimuth)],
             [np.cos(self.tracker_zenith)]])
-        # 2. rotate tracker normal vector from global to system reference frame 
+        # 2. rotate tracker normal vector from global to system reference frame
         tr_norm_sys_Rz = np.dot(self._sys_z_rot, tr_norm)
         tr_norm_sys = np.dot(self._sys_x_rot, tr_norm_sys_Rz)
         # 3. side slope is angle between tracker normal and system plane normal
@@ -195,7 +196,7 @@ class SingleaxisTrackerWSlope():
         ze = solar_position['apparent_zenith'].values
         az = solar_position['azimuth'].values
         is_day = ze < DAY
-        solar_vector = get_solar_vector(ze, az)
+        solar_vector = _get_solar_vector(ze, az)
         # rotate solar vector into system plane coordinate system
         sol_sys_Rz = np.dot(self._sys_z_rot, solar_vector)
         sol_sys = np.dot(self._sys_x_rot, sol_sys_Rz)
@@ -231,7 +232,7 @@ def test_tracker_rotation():
         system_plane=(77.34, 10.1149),
         tracker_azimuth=0,
         max_rotation=75,
-        gcr = 0.328
+        gcr=0.328
     )
     assert np.isclose(
         singleaxis_tracker_wslope_test.system_azimuth, 1.349837643)
