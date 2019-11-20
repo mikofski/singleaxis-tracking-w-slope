@@ -307,14 +307,17 @@ def test_pvlib_tilt20():
 def test_pvlib_gh656():
     kwargs = dict(apparent_zenith=80, apparent_azimuth=338, axis_tilt=30,
                   axis_azimuth=180, max_angle=60, backtrack=True, gcr=0.35)
-    pvlib_gh656 = pvlib.tracking.singleaxis(apparent_zenith=80, apparent_azimuth=338, axis_tilt=30,
-                  axis_azimuth=180, max_angle=60, backtrack=True, gcr=0.35)
+    pvlib_gh656 = pvlib.tracking.singleaxis(**kwargs)
     LOGGER.debug('tracker theta = %g', pvlib_gh656['tracker_theta'])
     LOGGER.debug('aoi = %g', pvlib_gh656['aoi'])
     sat_gh65 = SingleaxisTrackerWSlope(
-        (180.0, 30.0), 0, max_rotation=60, gcr=0.35)
+        (kwargs['axis_azimuth'], kwargs['axis_tilt']), kwargs['axis_azimuth'],
+        max_rotation=kwargs['max_angle'], gcr=kwargs['gcr'])
+    LOGGER.debug('tilt = %g', np.degrees(sat_gh65.tracker_zenith))
+    LOGGER.debug('side slope = %g', np.degrees(sat_gh65.tracker_side_slope))
     solpos = pd.DataFrame(
-        dict(apparent_zenith=[80], azimuth=[338]),
+        dict(apparent_zenith=[kwargs['apparent_zenith']],
+             azimuth=[kwargs['apparent_azimuth']]),
         index=['2017-01-01T19:00:00-0800'])
     trrot, aoi, _ = sat_gh65.calc_tracker_rotation(solpos)
     LOGGER.debug('trrot: %g, aoi: %g', trrot, aoi)
