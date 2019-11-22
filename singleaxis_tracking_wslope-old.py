@@ -201,14 +201,18 @@ class SingleaxisTrackerWSlope():
         # tracker rotation without limits
         tr_rot_no_lim = np.arctan2(sol_sys_tr[0, :], sol_sys_tr[2, :])
         if backtracking:
-            # this could be a place to try the walrus := operator from py38
-            lrot = np.cos(tr_rot_no_lim)  # lrot < 0 if tr_rot > 90[deg]
-            # tr_rot can happen at low angles if axis tilt > 0
-            is_backtrack = lrot < self.gcr
-            is_backtrack = np.logical_and(is_backtrack, is_day)
-            cos_rot = np.clip(lrot / self.gcr, -1, 1)  # avoid numpy warnings
-            backtrack_rot = np.where(is_backtrack, np.arccos(cos_rot), 0)
-            # this could be a place to try the walrus := operator from py38
+            lrot = np.cos(tr_rot_no_lim)  # cos(R) = L / Lx
+            # lrot < 0 if tr_rot > 90[deg]
+            # which *can* happen at low angles if axis tilt > 0
+            # tracker should never backtrack more than 90[deg]
+            cos_rot = np.minimum(np.abs(lrot) / self.gcr, 1)
+            # so if lrot<0 tracker should backtrack forward
+            backtrack_rot = np.sign(lrot) * np.arccos(cos_rot)
+            # as implemented in pvlib after gh656
+            # cos_rot = np.clip(lrot/self.gcr, -1, 1)
+            # backtrack_rot = np.arccos(cos_rot)
+
+            # TODO: limit backtracking to rotation, so can't backtrack past 0
             # abs_tr_rot = np.abs(tr_rot_no_lim)
             # backtrack_rot = np.where(
             #     backtrack_rot < abs_tr_rot, backtrack_rot, abs_tr_rot)
@@ -220,7 +224,10 @@ class SingleaxisTrackerWSlope():
         tr_rot_rad = tr_rot_backtrack
         tr_rot_rad = np.maximum(-self.max_rotation, tr_rot_rad)
         tr_rot_rad = np.minimum(tr_rot_rad, self.max_rotation)
+        # ignore night
         tr_rot_rad[~is_day] = np.nan
+        tr_rot_no_lim[~is_day] = np.nan
+        tr_rot_backtrack[~is_day] = np.nan
         # calculate angle of incidence
         x_tracker = np.sin(tr_rot_rad)
         z_tracker = np.cos(tr_rot_rad)
