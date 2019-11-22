@@ -203,15 +203,20 @@ class SingleaxisTrackerWSlope():
         if backtracking:
             # this could be a place to try the walrus := operator from py38
             lrot = np.cos(tr_rot_no_lim)  # lrot < 0 if tr_rot > 90[deg]
+            # tr_rot can happen at low angles if axis tilt > 0
             is_backtrack = lrot < self.gcr
             is_backtrack = np.logical_and(is_backtrack, is_day)
             cos_rot = np.clip(lrot / self.gcr, -1, 1)  # avoid numpy warnings
             backtrack_rot = np.where(is_backtrack, np.arccos(cos_rot), 0)
+            # this could be a place to try the walrus := operator from py38
+            # abs_tr_rot = np.abs(tr_rot_no_lim)
+            # backtrack_rot = np.where(
+            #     backtrack_rot < abs_tr_rot, backtrack_rot, abs_tr_rot)
             sign_tr_rot = np.sign(tr_rot_no_lim)
             tr_rot_backtrack = tr_rot_no_lim - backtrack_rot * sign_tr_rot
         else:
             tr_rot_backtrack = tr_rot_no_lim
-        # appliy rotation limits
+        # apply rotation limits
         tr_rot_rad = tr_rot_backtrack
         tr_rot_rad = np.maximum(-self.max_rotation, tr_rot_rad)
         tr_rot_rad = np.minimum(tr_rot_rad, self.max_rotation)
@@ -260,15 +265,15 @@ def test_tracker_rotation():
     solpos = pvlib.solarposition.get_solarposition(times, lat, lon)
     trrot, aoi, trrot_nolim, trrot_back \
         = singleaxis_tracker_wslope_test.calc_tracker_rotation(solpos)
-    expected = pd.read_csv('Florianopolis_Brasilia.csv')
+    expected = pd.read_csv(
+        'Florianopolis_Brasilia.csv', index_col='timestamp', parse_dates=True)
     assert np.allclose(
         solpos['apparent_zenith'], expected['zen'], equal_nan=True)
     assert np.allclose(
         solpos['azimuth'], expected['azim'], equal_nan=True)
-    day = solpos['apparent_zenith'].values < 90
     assert np.allclose(
-        trrot[day], expected['trrot'][day].values, equal_nan=True)
-    aoi90 = (aoi < 90) & day
+        trrot, expected['trrot'].values, equal_nan=True)
+    aoi90 = aoi < 90
     assert np.allclose(
         aoi[aoi90], expected['aoi'][aoi90].values, 0.00055, equal_nan=True)
     return (trrot, aoi, trrot_nolim, trrot_back, solpos,
